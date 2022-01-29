@@ -22,6 +22,7 @@ Analyser::Analyser(QObject *parent, const QString& input, bool walk) :
   this->setObjectName("Avisynth Analyser");
   QString avisynthDll = QDir::toNativeSeparators(qApp->applicationDirPath() + QDir::separator() + QString("AviSynth.dll"));
   if (!QFile::exists(avisynthDll)) {
+    std::cerr << qPrintable(avisynthDll) << " does not exist." << std::endl;
     avisynthDll = QString("AviSynth.dll");
   }
   m_avsDLL.setFileName(avisynthDll);
@@ -63,9 +64,16 @@ bool Analyser::initEnv()
     m_env = CreateScriptEnvironment(AVISYNTH_INTERFACE_VERSION); //create a new IScriptEnvironment
     if (!m_env) { //abort if IScriptEnvironment couldn't be created
       std::cerr << "Could not create IScriptenvironment for AVISYNTH_INTERFACE_VERSION " << AVISYNTH_INTERFACE_VERSION <<",..." << std::endl;
-      return false;
+      m_env = CreateScriptEnvironment(AVISYNTH_CLASSIC_INTERFACE_VERSION); //create a new IScriptEnvironment
+      if (!m_env) { //abort if IScriptEnvironment couldn't be created
+        std::cerr << "Could not create IScriptenvironment for AVISYNTH_CLASSIC_INTERFACE_VERSION " << AVISYNTH_CLASSIC_INTERFACE_VERSION <<",..." << std::endl;
+        return false;
+      } else {
+        std::cout << "loaded IScriptEnvironment using AVISYNTH_CLASSIC_INTERFACE_VERSION,.. ("<< AVISYNTH_CLASSIC_INTERFACE_VERSION << ")" << std::endl;
+      }
+    } else {
+      std::cout << "loaded IScriptEnvironment using AVISYNTH_INTERFACE_VERSION,.. ("<< AVISYNTH_INTERFACE_VERSION << ")" << std::endl;
     }
-    std::cout << "loaded IScriptEnvironment using AVISYNTH_INTERFACE_VERSION,.. ("<< AVISYNTH_INTERFACE_VERSION << ")" << std::endl;
   } catch (AvisynthError &err) { //catch AvisynthErrors
      std::cerr << "-> " << err.msg << std::endl;
      return false;
@@ -87,20 +95,23 @@ bool Analyser::setRessource()
     return false;
   }
   std::cout << "getting avs linkage from environment" << std::endl;
-  for (int i = 0; i < 10; ++i) {
-    try {
-      AVS_linkage = m_env->GetAVSLinkage();
-      break;
-    } catch (...) { //catch everything else
-      std::cerr << "failed: " << i << std::endl;
-    }
-  }
-  std::cout << "Importing " << qPrintable(m_currentInput) << std::endl;
   try {
+    AVS_linkage = m_env->GetAVSLinkage();
+  } catch (...) { //catch everything else
+    std::cerr << "failed getting avs linkage from environment!" << std::endl;
+    return false;
+  }
+  if (AVS_linkage == nullptr) {
+    std::cerr << "AVS_linkage is nullptr" << std::endl;
+    return false;
+  }
+  try { // always fails for 32bit WTF?!
+    std::cout << "Importing " << qPrintable(m_currentInput) << std::endl;
     const char* infile = m_currentInput.toLocal8Bit(); //convert input name to char*
     AVSValue arg(infile);
     m_res = m_env->Invoke("Import", AVSValue(&arg, 1));
   } catch (AvisynthError &err) { //catch AvisynthErrors
+    std::cout << "Failed importing " << qPrintable(m_currentInput) << std::endl;
     std::cerr << "-> " << err.msg << std::endl;
     return false;
   } catch (...) { //catch everything else

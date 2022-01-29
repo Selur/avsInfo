@@ -25,10 +25,11 @@ greaterThan(QT_MAJOR_VERSION, 4) { # QT5+
 CODECFORSRC = UTF-8
 CODECFORTR = UTF-8
 TEMPLATE = app
-contains(QMAKE_HOST.arch, x86_64) {
-  TARGET = avsInfo64
-} else {
+
+!contains(QMAKE_HOST.arch, x86_64) {
   TARGET = avsInfo
+} else {
+  TARGET = avsInfo64
 }
 
 HEADERS += Analyser.h
