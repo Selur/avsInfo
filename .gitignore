@@ -1,0 +1,10 @@
+.DS_Store
+/avsInfo.pro.user
+/Makefile
+/Makefile.Debug
+/Makefile.Release
+/release
+/debug
+/.qmake.stash
+/.project
+/.cproject
