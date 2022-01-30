@@ -141,7 +141,6 @@ void Analyser::closing()
     m_env = nullptr; // ensure new environment created next time
   }
   if (m_avsDLL.isLoaded()) {
-    std::cerr << "unload dll" << std::endl;
     m_avsDLL.unload();
   }
   emit closeApplication();
@@ -199,7 +198,7 @@ QString Analyser::getColor()
 void Analyser::showVideoInfo()
 {
   std::cout << "Color: " << qPrintable(this->getColor());
-  std::cout << ", Bit depth: " << m_inf->BitsPerComponent()  << std::endl;
+  std::cout << ", Bit depth: " << m_inf->BitsPerComponent();
   std::cout << ", Resolution: " << m_inf->width << "x" << m_inf->height;
   if (m_inf->fps_denominator == 1) {
      std::cout << ", Frame rate: " << m_inf->fps_numerator << " fps";
