@@ -68,12 +68,12 @@ bool Analyser::initEnv()
       if (!m_env) { //abort if IScriptEnvironment couldn't be created
         std::cerr << "Could not create IScriptenvironment for AVISYNTH_CLASSIC_INTERFACE_VERSION " << AVISYNTH_CLASSIC_INTERFACE_VERSION <<",..." << std::endl;
         return false;
-      } else {
-        std::cout << "loaded IScriptEnvironment using AVISYNTH_CLASSIC_INTERFACE_VERSION,.. ("<< AVISYNTH_CLASSIC_INTERFACE_VERSION << ")" << std::endl;
-      }
-    } else {
+      }/* else {
+       std::cout << "loaded IScriptEnvironment using AVISYNTH_CLASSIC_INTERFACE_VERSION,.. ("<< AVISYNTH_CLASSIC_INTERFACE_VERSION << ")" << std::endl;
+      }*/
+    }/* else {
       std::cout << "loaded IScriptEnvironment using AVISYNTH_INTERFACE_VERSION,.. ("<< AVISYNTH_INTERFACE_VERSION << ")" << std::endl;
-    }
+    }*/
   } catch (AvisynthError &err) { //catch AvisynthErrors
      std::cerr << "-> " << err.msg << std::endl;
      return false;
@@ -136,17 +136,12 @@ void Analyser::closing()
 {
   if (m_env != nullptr) {
     m_env->Free(&m_res);
-    try {
-      m_env->DeleteScriptEnvironment(); //delete the old script environment this causes a crash no clue why
-    } catch (AvisynthError &err) { //catch AvisynthErrors
-      std::cerr << "Failed to delete script environment " << err.msg << std::endl;
-    } catch (...) {
-      std::cerr << "Failed to delete script environment,.. (Unkown Error)" << std::endl;
-    }
+    m_res = 0;
+    delete(m_env);
     m_env = nullptr; // ensure new environment created next time
   }
-  m_res = 0;
   if (m_avsDLL.isLoaded()) {
+    std::cerr << "unload dll" << std::endl;
     m_avsDLL.unload();
   }
   emit closeApplication();
@@ -204,6 +199,7 @@ QString Analyser::getColor()
 void Analyser::showVideoInfo()
 {
   std::cout << "Color: " << qPrintable(this->getColor());
+  std::cout << ", Bit depth: " << m_inf->BitsPerComponent()  << std::endl;
   std::cout << ", Resolution: " << m_inf->width << "x" << m_inf->height;
   if (m_inf->fps_denominator == 1) {
      std::cout << ", Frame rate: " << m_inf->fps_numerator << " fps";
