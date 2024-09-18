@@ -75,8 +75,8 @@ bool Analyser::initEnv()
       std::cout << "loaded IScriptEnvironment using AVISYNTH_INTERFACE_VERSION,.. ("<< AVISYNTH_INTERFACE_VERSION << ")" << std::endl;
     }*/
   } catch (AvisynthError &err) { //catch AvisynthErrors
-     std::cerr << "-> " << err.msg << std::endl;
-     return false;
+    std::cerr << "-> " << err.msg << std::endl;
+    return false;
    } catch (...) { //catch everything else
      std::cerr << "-> CreateScriptEnvironment: Unknown error" << std::endl;
      return false;
@@ -94,24 +94,26 @@ bool Analyser::setRessource()
     std::cerr << "AVS_linkage isn't nullptr" << std::endl;
     return false;
   }
-  std::cout << "getting avs linkage from environment" << std::endl;
+  std::cerr << "getting avs linkage from environment" << std::endl;
   try {
     AVS_linkage = m_env->GetAVSLinkage();
   } catch (...) { //catch everything else
     std::cerr << "failed getting avs linkage from environment!" << std::endl;
     return false;
   }
+  std::cerr << "checking avs linkage" << std::endl;
   if (AVS_linkage == nullptr) {
     std::cerr << "AVS_linkage is nullptr" << std::endl;
     return false;
   }
+  std::cerr << "try to import" << std::endl;
   try { // always fails for 32bit WTF?!
     std::cout << "Importing " << qPrintable(m_currentInput) << std::endl;
     const char* infile = m_currentInput.toLocal8Bit(); //convert input name to char*
     AVSValue arg(infile);
     m_res = m_env->Invoke("Import", AVSValue(&arg, 1));
   } catch (AvisynthError &err) { //catch AvisynthErrors
-    std::cout << "Failed importing " << qPrintable(m_currentInput) << std::endl;
+    std::cerr << "Failed importing " << qPrintable(m_currentInput) << std::endl;
     std::cerr << "-> " << err.msg << std::endl;
     return false;
   } catch (...) { //catch everything else
@@ -187,6 +189,15 @@ QString Analyser::getColor()
     return QString("RGB");
   }
   if (m_inf->IsYUV()) {
+    if (m_inf->CS_GENERIC_YUV420) {
+      return QString("YV12");
+    }
+    else if (m_inf->CS_GENERIC_YUV422) {
+      return QString("YV16");
+    }
+    else if (m_inf->CS_GENERIC_YUV444) {
+      return QString("YV24");
+    }
     return QString("YUV");
   }
   return QString("unkown");
