@@ -12,6 +12,7 @@
 #include <QApplication>
 #include "windows.h"
 #include <iostream>
+#include <new>
 
 const AVS_Linkage *AVS_linkage = nullptr;
 
@@ -106,10 +107,24 @@ bool Analyser::setRessource()
     std::cerr << "AVS_linkage is nullptr" << std::endl;
     return false;
   }
+  // m_res wurde im Analyser-Konstruktor angelegt, als AVS_linkage noch nullptr war. Alle
+  // AVSValue-Konstruktoren sind in avisynth.h AVS_BakedCode und expandieren dann zu
+  // '(void)0', tun also *nichts*: das Member blieb uninitialisierter Speicher. Die erste
+  // Zuweisung unten interpretiert diesen Inhalt als bisherigen Wert und gibt ihn frei
+  // -> Release()/delete[] auf einen Zufallszeiger. Hier bisher unauffaellig, weil der
+  // Analyser als Stack-Objekt direkt beim Programmstart entsteht und der Stack dort
+  // verlaesslich genullt ist; in MkvCutter (Heap, laufende GUI) war genau das die Ursache
+  // sporadischer Abstuerze. Jetzt, mit gueltiger Linkage, einmal richtig konstruieren.
+  // Placement-new laesst den Destruktor bewusst aus -- auf dem Muell waere er das Problem.
+  new (&m_res) AVSValue();
   std::cerr << "try to import" << std::endl;
   try { // always fails for 32bit WTF?!
     std::cout << "Importing " << qPrintable(m_currentInput) << std::endl;
-    const char* infile = m_currentInput.toLocal8Bit(); //convert input name to char*
+    // Der QByteArray muss so lange leben wie der Zeiger: 'm_currentInput.toLocal8Bit()'
+    // direkt einem const char* zuzuweisen liefert einen Zeiger in ein Temporary, das am
+    // Ende der Anweisung zerstoert wird.
+    const QByteArray infileLocal8Bit = m_currentInput.toLocal8Bit();
+    const char* infile = infileLocal8Bit.constData();
     AVSValue arg(infile);
     m_res = m_env->Invoke("Import", AVSValue(&arg, 1));
   } catch (AvisynthError &err) { //catch AvisynthErrors
@@ -164,6 +179,13 @@ QString Analyser::getColor()
   if (m_inf->IsY8()) {
     return QString("Y8");
   }
+  // IsY8() trifft nur 8 Bit. Graustufen mit hoeherer Bittiefe (Y10/Y12/Y14/Y16/Y32) fielen
+  // bis in den YUV-Fallback durch -- IsYUV() ist fuer Y-Formate wahr, Is420()/Is422()/Is444()
+  // aber nicht -- und wurden dort als "YUV" gemeldet. IsY() ist die bittiefenunabhaengige
+  // Abfrage; die Bittiefe steht ohnehin separat in showVideoInfo().
+  if (m_inf->IsY()) {
+    return QString("Y");
+  }
   if (m_inf->Is420()) {
     return QString("YV12");
   }
@@ -189,13 +211,18 @@ QString Analyser::getColor()
     return QString("RGB");
   }
   if (m_inf->IsYUV()) {
-    if (m_inf->CS_GENERIC_YUV420) {
+    // CS_GENERIC_YUV420/422/444 sind Enum-Konstanten (Farbraum-Bitmuster aus VideoInfo),
+    // keine Abfragen: 'if (m_inf->CS_GENERIC_YUV420)' ist immer wahr und meldete deshalb
+    // jedes hier ankommende YUV-Format als YV12. Hier landen vor allem planare Formate mit
+    // hoher Bittiefe, denn IsYV16()/IsYV24() weiter oben treffen nur 8 Bit.
+    // Die bittiefenunabhaengigen Abfragen heissen Is420()/Is422()/Is444().
+    if (m_inf->Is420()) {
       return QString("YV12");
     }
-    else if (m_inf->CS_GENERIC_YUV422) {
+    else if (m_inf->Is422()) {
       return QString("YV16");
     }
-    else if (m_inf->CS_GENERIC_YUV444) {
+    else if (m_inf->Is444()) {
       return QString("YV24");
     }
     return QString("YUV");
@@ -218,12 +245,21 @@ void Analyser::showVideoInfo()
   }
   m_frameCount = m_inf->num_frames;
   std::cout << ", Length: " << m_frameCount << " frames";
-  if (m_inf->IsBFF()) {
-    std::cout << ", BFF" << std::endl;
+  // IsBFF()/IsTFF() fragen nur die rohen Bits IT_BFF/IT_TFF im image_type ab und sind fuer
+  // sich genommen nicht aussagekraeftig: schon ein rein progressiver FFVideoSource-Clip
+  // liefert image_type=1, also IT_BFF gesetzt (gemessen 2026-09-07). Die alte Abfrage
+  // "if (IsBFF())" meldete deshalb praktisch immer BFF.
+  // Aussagekraeftig wird die Feldreihenfolge erst, wenn AviSynth sie als bekannt markiert:
+  // IsParityKnown() == (image_type & IT_FIELDBASED) && (image_type & (IT_BFF|IT_TFF)).
+  // Hinweis: Ein nur per AssumeTFF()/AssumeBFF() markierter, aber frame-basierter Clip gilt
+  // damit weiterhin als PRO -- AviSynth verlangt fuer IsParityKnown() zusaetzlich
+  // IT_FIELDBASED, das erst SeparateFields() setzt.
+  if (!m_inf->IsParityKnown()) {
+    std::cout << ", PRO" << std::endl;
   } else if (m_inf->IsTFF()) {
     std::cout << ", TFF" << std::endl;
   } else {
-    std::cout << ", PRO" << std::endl;
+    std::cout << ", BFF" << std::endl;
   }
   if (m_inf->HasAudio()) {
     int sampleRate = m_inf->audio_samples_per_second;
