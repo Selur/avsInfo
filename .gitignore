@@ -8,3 +8,5 @@
 /.qmake.stash
 /.project
 /.cproject
+/.qtcreator/
+/.vs/
